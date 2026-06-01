@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Sirener i Randers Kommune</name>
+    <description>Her er sirenerne i Randers Kommune</description>
+    <Style id="icon-1625-000000-normal">
+      <IconStyle>
+        <color>ff000000</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+    </Style>
+    <Style id="icon-1625-000000-highlight">
+      <IconStyle>
+        <color>ff000000</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+    </Style>
+    <StyleMap id="icon-1625-000000">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1625-000000-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1625-000000-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Folder>
+      <name>Unavngivet lag</name>
+      <Placemark>
+        <name>Gydevej 3</name>
+        <description>Græsareal ved skole</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.89995599999997,56.399793,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Vestergade 3</name>
+        <description>Bygning</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.89438599999994,56.387542,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Landsbygaden 2</name>
+        <description>Græsareal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.9460009,56.4334422,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Bakkevænget 6</name>
+        <description>Træbevoksning, græs / sportsplads</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.85202939999999,56.543537,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Doktor Alle 9</name>
+        <description>Græsareal / Dyrket jord</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.0362835,56.5399972,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Bøgevej 1 A-D</name>
+        <description>Bygning</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.90831000000003,56.485922,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gammel Hadsundvej 2</name>
+        <description>Hotel Scandic</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.042147,56.464395,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Basthaven ved nummer 7</name>
+        <description>P-Plads</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.0091526,56.4801749,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Flyvervej 5</name>
+        <description>Bygning</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.037614,56.483256,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Dronningborg Alle 12</name>
+        <description>Græsareal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.0742729999999,56.478425,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Viborgvej 92</name>
+        <description>TDC-mast, stadion</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.0095181,56.4656438,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>H. C. Andersens Vej 1-3</name>
+        <description>Græsareal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.96988199999998,56.461485,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Høvejen 17</name>
+        <description>Sportsplads</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.03043,56.447053,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Clausholmvej 23</name>
+        <description>Græsareal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.068628,56.442184,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Orkestervej 21</name>
+        <description>Grønt område</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.0422695,56.4347082,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Tronholmen 12</name>
+        <description>Bygning</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.049225,56.456195,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Rønnebærvej 35</name>
+        <description>Sportsplads</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            9.99077899999997,56.480575,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Vandværksvej 18</name>
+        <description>Græsareal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.141345,56.438374,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Stadionvej 41</name>
+        <description>Sportshal</description>
+        <styleUrl>#icon-1625-000000</styleUrl>
+        <Point>
+          <coordinates>
+            10.1615998,56.4464083,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

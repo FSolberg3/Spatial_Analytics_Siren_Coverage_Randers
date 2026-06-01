@@ -1,0 +1,795 @@
+---
+title: "Spatial_approaches"
+author: "Frederik Solberg"
+output: 
+  html_document:
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# loading libraries
+library(sf)
+library(tidyverse)
+library(leaflet)
+library(dplyr)
+library(htmlwidgets)
+library(terra)
+```
+
+```{r}
+# extracting Randers municipality boundary
+municipalities <- st_read("../in/au_inspire.gpkg")
+
+municipalities_only <- municipalities %>% 
+  filter(nationallevelname == "Kommune")
+
+randers <- municipalities_only %>% 
+  filter(name_gn_spell_spellofna_text == "Randers")
+
+st_crs(randers)
+```
+
+```{r}
+# loading sirens and transforming crs
+sirens <- st_read("../in/sirener.kml")
+
+sirens_25832 <- st_transform(sirens, st_crs(randers))
+
+st_crs(sirens_25832)
+
+nrow(sirens_25832)
+```
+
+```{r}
+# visual sanity check
+plot(st_geometry(randers), col ="white", border ="black")
+plot(st_geometry(sirens_25832), col = "red", pch = 20, add = TRUE)
+```
+
+```{r}
+# creating siren buffers of 1km
+siren_buffers <- st_buffer(
+  sirens_25832,
+  dist = 1000
+)
+
+# limiting buffers to within Randers boundary
+siren_buffers_randers <- st_intersection(
+  siren_buffers,
+  randers
+)
+```
+
+```{r}
+# visual sanity check
+plot(st_geometry(randers), col = "white", border = "black")
+plot(st_geometry(siren_buffers_randers), col="lightblue", border = "blue", add = TRUE)
+plot(st_geometry(sirens_25832), col = "red", pch = 20, add = TRUE)
+```
+
+```{r}
+# loading buildings and inspecting
+buildings <- st_read("../in/GEODKV_V3_Bygning_0730_TotalDownload_gpkg_Current_626.gpkg")
+
+table(buildings$synligbygning)
+table(buildings$underminimumbygning)
+
+buildings %>% 
+  st_drop_geometry() %>% 
+  count(bygningstype, sort = TRUE)
+```
+
+```{r}
+# selecting out only Bygning and Husbåd
+buildings <- buildings %>% 
+  filter(
+    bygningstype %in% c("Bygning", "Husbåd"),
+    underminimumbygning == 0
+  )
+
+# indentifying geometry
+buildings <- st_set_geometry(buildings, "geometri")
+
+st_crs(buildings)
+```
+
+```{r}
+# visual sanity check
+plot(st_geometry(randers), col = "white", border = "black")
+plot(st_geometry(siren_buffers_randers), col="lightblue", border = "blue", add = TRUE)
+plot(st_geometry(buildings), border = "grey", add = TRUE)
+plot(st_geometry(sirens_25832), col = "red", pch = 20, add = TRUE)
+```
+
+```{r}
+# loading and inspecting population grid
+pop <- rast("../in/JRC-ESTAT_Census_Population_2021_100m/JRC-ESTAT_Census_Population_2021_100m.tif")
+
+pop
+crs(pop)
+```
+
+```{r}
+# Transforming municipality and buffers to EPSG:3035 and clipping population raster to Randers municipality
+randers_3035 <- st_transform(randers, 3035)
+buffers_3035 <- st_transform(siren_buffers_randers, 3035)
+
+randers_vect <- vect(randers_3035)
+
+pop_randers <- crop(pop, randers_vect)
+
+pop_randers
+```
+
+```{r}
+# converting raster cells to polygon features
+pop_cells <- as.polygons(pop_randers, values = TRUE, na.rm = TRUE, dissolve = FALSE)
+
+pop_cells_sf <- st_as_sf(pop_cells)
+
+names(pop_cells_sf)
+```
+
+```{r}
+# renaming to population and adding unique id to each population cell
+pop_cells_sf <- pop_cells_sf %>% 
+  rename(population = "JRC-ESTAT_Census_Population_2021_100m")  %>% 
+  mutate(cell_id = row_number())
+names(pop_cells_sf)
+```
+
+```{r}
+# inspecting
+st_crs(pop_cells_sf)
+st_crs(siren_buffers_randers)
+```
+
+```{r}
+# transforming buffers to EPSG:3035 and dissolving them into a siren coverage area
+siren_buffers_randers_3035 <- st_transform(siren_buffers_randers, 3035)
+
+siren_coverage_3035 <- st_union(siren_buffers_randers_3035)
+
+siren_coverage_3035 <- st_sf(
+  geometry = siren_coverage_3035
+)
+
+st_crs(pop_cells_sf)
+st_crs(siren_buffers_randers_3035)
+```
+
+```{r}
+# summing total population of population cells
+sum(pop_cells_sf$population, na.rm=TRUE)
+```
+
+```{r}
+# calculating proportion of each cell that falls within Randers boundary and adjusting population respectively
+randers_3035_sf <- st_transform(randers, 3035)
+
+pop_cells_sf$cell_area <- as.numeric(st_area(pop_cells_sf))
+
+cell_inside_randers <- st_intersection(
+  pop_cells_sf,
+  randers_3035_sf
+)
+
+cell_inside_randers$inside_area <- as.numeric(st_area(cell_inside_randers))
+
+cell_inside_randers <- cell_inside_randers %>% 
+  mutate(
+    randers_fraction= inside_area / cell_area,
+    population_randers = population * randers_fraction
+  )
+
+sum(cell_inside_randers$population_randers, na.rm = TRUE)
+```
+
+```{r}
+# setting cells as covered only if they are completely within dissolved siren coverage
+cell_inside_randers$covered_conservative <- lengths(
+  st_within(
+    cell_inside_randers,
+    siren_coverage_3035
+  )
+) > 0
+
+table(cell_inside_randers$covered_conservative)
+```
+
+```{r}
+# summarizing covered and uncoverede population cells
+results_part1 <- cell_inside_randers %>% 
+  st_drop_geometry() %>% 
+  group_by(covered_conservative) %>% 
+  summarise(
+    cells = n(),
+    population = sum(population_randers, na.rm = TRUE)
+  )
+```
+
+```{r}
+# calculating percentage for each coverage category of total population
+results_part1 <- results_part1 %>% 
+  mutate(
+    population = round(population,0),
+    pct_population = round(100 * population / sum(population), 2)
+  )
+
+write.csv(results_part1, "../out/results_part1_population_grid.csv", row.names = FALSE)
+```
+
+```{r}
+# preparing population cells for leaflet and adding labels
+cell_map <- cell_inside_randers %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326) %>% 
+  mutate(
+    coverage_status = ifelse(
+      covered_conservative,
+      "Fully within siren coverage",
+      "Not fully within siren coverage"
+    )
+  )
+```
+
+```{r}
+# transforming spatial layers to EPSG:4326
+buildings_map_cells <- buildings %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+sirens_map <- sirens_25832 %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+```
+
+```{r}
+# creating interactive leaflet map of conservative siren coverage
+cell_pal <- colorFactor(
+  palette = c("Fully within siren coverage" = "darkgreen", "Not fully within siren coverage" = "red"),
+  domain = cell_map$coverage_status
+)
+
+cell_coverage_map <- leaflet(
+  options=leafletOptions(
+    preferCanvas = TRUE, 
+    zoomControl = TRUE,
+    zoomSnap = 0.01,
+    zoomDelta = 0.01)
+  ) %>% 
+  addTiles(urlTemplate = "",
+           options = tileOptions(opacity = 0)
+           ) %>% 
+  
+  addPolygons(
+    data = buildings_map_cells,
+    color = "black",
+    weight = 0.5,
+    opacity = 0.8,
+    fillColor = "grey",
+    fillOpacity = 0.25,
+    group = "Building footprints"
+  ) %>% 
+  
+  addPolygons(
+    data = cell_map,
+    fillColor = ~cell_pal(coverage_status),
+    fillOpacity = 0.3,
+    color = "gray",
+    weight = 0.3,
+    opacity = 0.5,
+    popup = ~paste0(
+      "Status: ", coverage_status,
+      "<br>Adjusted population: ", round(population_randers, 2),
+      "<br>Original cell population: ", population,
+      "<br>Randers fraction: ", round(randers_fraction, 3)
+      ),
+    group = "Population cells"
+  ) %>% 
+  
+  addPolygons(
+    data = st_transform(randers_3035_sf, 4326),
+    fill = FALSE,
+    color = "grey",
+    weight = 2,
+    group = "Randers border"
+  ) %>% 
+  
+  addPolygons(
+    data = st_transform(siren_coverage_3035, 4326),
+    fill = FALSE,
+    color = "black",
+    weight = 1,
+    opacity = 0.8,
+    dashArray = "6,6",
+    group = "1 km siren buffers"
+  ) %>% 
+  
+   addCircleMarkers(
+    data = sirens_map,
+    radius = 4,
+    color = "black",
+    fillColor = "black",
+    fillOpacity = 1,
+    stroke = FALSE,
+    popup = ~Name,
+    group = "Sirens"
+  ) %>% 
+  
+  addLegend(
+    position = "topleft",
+    pal = cell_pal,
+    values = cell_map$coverage_status,
+    title = "Grid cell coverage"
+  ) %>% 
+  
+  addControl(
+    html = "
+    <div style='background:white; padding:8px; border:1px solid #999; font-size:13px;'>
+      <div><span style='display:inline-block; width: 14px; border-top:2px dashed black; margin-right:6px; vertical-align:middle;'></span> 1 km siren buffer</div>
+      <div><span style='display:inline-block; width: 10px; height:10px; border:2px solid grey; background:white; margin-right:10px;'></span> Grid cell</div>
+      <div><span style='display:inline-block; width: 10px; height:10px; background:black; border-radius:50%; margin-right:12px;'></span> Siren</div>
+      <div><span style='display:inline-block; width: 10px; height:10px; background:#bdbdbd; border:2px solid black; margin-right:10px;'></span> Building footprints</div>
+      </div>
+    ",
+    position = "topleft"
+  ) %>% 
+  
+  addScaleBar(
+      position = "bottomleft",
+      options = scaleBarOptions(
+        metric = TRUE,
+        imperial = FALSE,
+        maxWidth = 300
+      )
+    ) %>% 
+        
+  addLayersControl(
+    overlayGroups = c(
+      "Building footprints",
+      "Population cells",
+      "Randers border",
+      "1 km siren buffers",
+      "Sirens"
+    ),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+cell_coverage_map
+
+saveWidget(
+  cell_coverage_map,
+  file = "../out/randers_cell_coverage_map.html",
+  selfcontained = TRUE
+)
+```
+
+# Part II
+```{r}
+# importing BBR bygnings data and inspecting
+bygning <- read.csv("../in/BBR_V3_Bygning_0730_TotalDownload_csv_Current_646.csv")
+
+names(bygning)
+
+sum(!is.na(bygning$byg021BygningensAnvendelse))
+sum(!is.na(bygning$byg021BygningensAnvendelse)) / nrow(bygning)
+sum(!is.na(bygning$byg039BygningensSamledeBoligAreal))
+
+summary(bygning$byg039BygningensSamledeBoligAreal)
+
+sum(buildings$bbruuid %in% bygning$id_lokalId, na.rm = TRUE)
+```
+
+```{r}
+# Subsetting residential buildings and inspecting match with builds with living area bbruid
+res_codes <- c(
+  110, 120, 121, 122, 130, 131, 132, 140, 150, 160, 185, 190
+)
+residential_buildings <- bygning %>%
+  filter(byg021BygningensAnvendelse %in% res_codes)
+
+sum(bygning$byg021BygningensAnvendelse %in% res_codes,
+    na.rm=TRUE)
+sum(bygning$byg039BygningensSamledeBoligAreal > 0,
+    na.rm = TRUE)
+
+sum(residential_buildings$id_lokalId %in% buildings$bbruuid,
+    na.rm = TRUE
+    ) / nrow(residential_buildings)
+
+```
+
+```{r}
+# Inspecting which types are not in out res_codes but have byg039BygningensSamledeBoligAreal > 0
+bygning %>% 
+  filter(
+    !(byg021BygningensAnvendelse %in% res_codes) &
+      bygning$byg039BygningensSamledeBoligAreal > 0
+  ) %>% 
+  count(byg021BygningensAnvendelse, sort = TRUE)
+```
+
+```{r}
+# joining our residential_buildings with our building footprints
+residential_buildings_sf <- buildings %>% 
+  inner_join(
+    residential_buildings,
+    by = c("bbruuid" = "id_lokalId")
+  )
+
+nrow(residential_buildings)
+nrow(residential_buildings_sf)
+```
+
+```{r}
+sum(
+  residential_buildings$byg039BygningensSamledeBoligAreal < 0,
+  na.rm = TRUE
+)
+sum(
+  is.na(residential_buildings$byg039BygningensSamledeBoligAreal)
+)
+sum(
+  residential_buildings$byg039BygningensSamledeBoligAreal > 0,
+  na.rm = TRUE
+)
+```
+
+```{r}
+# Filtering out for only > 0byg039BygningensSamledeBoligAreal
+residential_buildings_sf <- residential_buildings_sf %>% 
+  filter(
+    !is.na(byg039BygningensSamledeBoligAreal),
+    byg039BygningensSamledeBoligAreal > 0
+  )
+```
+
+```{r}
+# creating building centroids for residential buildings
+residential_centroids <- st_centroid(
+  residential_buildings_sf
+)
+nrow(residential_centroids)
+nrow(residential_buildings_sf)
+```
+
+```{r}
+# transforming residential centroids CRS
+residential_centroids_3035 <- st_transform(
+  residential_centroids,
+  st_crs(cell_inside_randers)
+)
+```
+
+
+```{r}
+# assigning each residential building centroid to a popultion cell
+residential_centroids_3035 <- st_join(
+  residential_centroids_3035,
+  dplyr::select(
+    cell_inside_randers,
+    cell_id, 
+    population_randers)
+)
+sum(is.na(residential_centroids_3035$cell_id))
+```
+
+```{r}
+# calculate total residential area within each population cell
+cell_residential_area <- residential_centroids_3035 %>% 
+  st_drop_geometry() %>% 
+  group_by(cell_id) %>% 
+  summarise(
+    total_residential_area = sum(
+      byg039BygningensSamledeBoligAreal,
+      na.rm = TRUE
+    )
+  )
+```
+
+```{r}
+# sanity checks
+cell_residential_area %>% 
+  summarise(
+    min_area = min(total_residential_area),
+    max_area = max(total_residential_area),
+    n_cells = n()
+  )
+sum(cell_residential_area$total_residential_area <= 0)
+```
+
+```{r}
+# joinin total res area to each res building
+residential_centroids_3035 <- residential_centroids_3035 %>% 
+  left_join(
+    cell_residential_area,
+    by = "cell_id"
+  )
+```
+
+```{r}
+# calculating each building share of cell residential area
+residential_centroids_3035 <- residential_centroids_3035 %>% 
+  mutate(
+    building_share = byg039BygningensSamledeBoligAreal / total_residential_area
+  )
+
+summary(residential_centroids_3035$building_share)
+sum(is.na(residential_centroids_3035$building_share))
+```
+
+```{r}
+# sanity check
+residential_centroids_3035 %>% 
+  st_drop_geometry() %>% 
+  group_by(cell_id) %>% 
+  summarise(
+    share_sum = sum(building_share)
+  ) %>% 
+  summarise(
+    min_share_sum = min(share_sum),
+    max_share_sum = max(share_sum)
+  )
+```
+
+```{r}
+# allocation of population to res buildings
+residential_centroids_3035 <- residential_centroids_3035 %>% 
+  mutate(
+    building_population = 
+      population_randers * building_share
+  )
+
+allocated_pop <- sum(residential_centroids_3035$building_population, na.rm = TRUE)
+total_pop <- sum(cell_inside_randers$population_randers, na.rm = TRUE)
+
+allocated_pop
+total_pop
+allocated_pop/total_pop
+total_pop-allocated_pop
+```
+```{r}
+# checking population living in cells with atleast one res building
+cell_allocation_check <- residential_centroids_3035 %>% 
+  st_drop_geometry() %>% 
+  distinct(cell_id)
+
+cell_inside_randers <- cell_inside_randers %>% 
+  mutate(
+    has_residential_building =
+      cell_id %in% cell_allocation_check$cell_id
+  )
+
+cell_inside_randers %>% 
+  st_drop_geometry() %>% 
+  group_by(has_residential_building) %>% 
+  summarise(
+    cells = n(),
+    population = sum(population_randers, na.rm = TRUE)
+  )
+```
+
+```{r}
+# classifying centroids as covered or not covered
+residential_centroids_3035$covered= lengths(
+      st_within(
+        residential_centroids_3035,
+        siren_coverage_3035
+      )
+    ) > 0
+  
+
+table(residential_centroids_3035$covered)
+```
+
+```{r}
+# summarising covered and not covered res building population
+results_part2 <- residential_centroids_3035 %>% 
+  st_drop_geometry() %>% 
+  group_by(covered) %>% 
+  summarise(
+    buildings = n(),
+    population = sum(building_population, na.rm = TRUE)
+  ) %>% 
+  mutate(
+    population = round(population,0),
+    pct_population = round(100 * population / sum(population), 2)
+  )
+
+write.csv(results_part2, "../out/results_part2_residential_building_population.csv", row.names = FALSE)
+
+results_part2
+```
+
+```{r}
+sirens_3035 <- st_transform(
+  sirens_25832,
+  3035
+)
+st_crs(residential_centroids_3035)
+st_crs(sirens_3035)
+```
+
+
+```{r}
+# Creating line from centroids to nearest siren only covered ones
+covered_centroids_3035 <- residential_centroids_3035 %>% 
+  filter(covered)
+
+nearest_siren_id <- st_nearest_feature(
+  covered_centroids_3035,
+  sirens_3035
+)
+
+nearest_lines <- st_nearest_points(
+  covered_centroids_3035,
+  sirens_3035[nearest_siren_id, ],
+  pairwise = TRUE
+)
+
+nearest_lines_sf <- st_sf(
+  geometry = nearest_lines,
+  crs = st_crs(covered_centroids_3035)
+)
+
+nrow(covered_centroids_3035)
+length(nearest_lines)
+```
+
+```{r}
+# transforming layers to ESPG:4326 for leaflet
+residential_buildings_map <- residential_buildings_sf %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+residential_centroids_map <- residential_centroids_3035 %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+covered_lines_map <- nearest_lines_sf %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+sirens_map_part2 <- sirens_3035 %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+
+randers_map_part2 <- randers_3035_sf %>% 
+  st_zm(drop = TRUE, what = "ZM") %>% 
+  st_transform(4326)
+```
+
+```{r}
+# creating labels for coverage for building centroids
+residential_centroids_map <- residential_centroids_map %>% 
+  mutate(
+    coverage_status = ifelse(
+      covered,
+      "Covered residential building",
+      "Not covered residential building"
+    )
+  )
+
+# creating interactive leaflet map of residential building coverage
+building_pal <- colorFactor(
+  palette = c("Covered residential building" = "darkgreen", "Not covered residential building" = "red"),
+  domain = residential_centroids_map$coverage_status
+)
+
+building_coverage_map <- leaflet(
+  options=leafletOptions(
+    preferCanvas = TRUE, 
+    zoomControl = TRUE,
+    zoomSnap = 0.01,
+    zoomDelta = 0.01)
+  ) %>% 
+  addTiles(urlTemplate = "",
+           options = tileOptions(opacity = 0)
+           ) %>% 
+  
+  addPolygons(
+    data = residential_buildings_map,
+    color = "black",
+    weight = 0.5,
+    opacity = 0.8,
+    fillColor = "grey",
+    fillOpacity = 0.25,
+    group = "Residential building footprints"
+  ) %>% 
+  
+  addPolylines(
+    data = covered_lines_map,
+    color = "black",
+    weight = 0.25,
+    opacity = 0.25,
+    group = "Lines to neares siren"
+  ) %>% 
+  
+  addCircleMarkers(
+    data = residential_centroids_map,
+    radius = 1,
+    color = ~building_pal(coverage_status),
+    stroke = FALSE,
+    fillOpacity = 0.7,
+    popup = ~paste0(
+      "Status: ", coverage_status,
+      "<br>Estimated population: ", round(building_population, 2),
+      "<br>Residential area: ", round(byg039BygningensSamledeBoligAreal, 1),
+      "<br>Cell populaion share: ", round(building_share, 3)
+      ),
+    group = "Residential building centroids"
+  ) %>%
+  
+  addPolygons(
+    data = randers_map_part2,
+    fill = FALSE,
+    color = "grey",
+    weight = 2,
+    group = "Randers border"
+  ) %>% 
+  
+   addCircleMarkers(
+    data = sirens_map_part2,
+    radius = 4,
+    color = "black",
+    fillColor = "black",
+    fillOpacity = 1,
+    stroke = FALSE,
+    popup = ~Name,
+    group = "Sirens"
+  ) %>% 
+  
+  addLegend(
+    position = "topleft",
+    pal = building_pal,
+    values = residential_centroids_map$coverage_status,
+    title = "Residential building coverage"
+  ) %>% 
+  
+  addControl(
+    html = "
+    <div style='background:white; padding:8px; border:1px solid #999; font-size:13px;'>
+      <div><span style='display:inline-block; width: 20px; border-top:1.5px solid black; margin-right:6px; vertical-align:middle;'></span> Line to heares siren</div>
+      <div><span style='display:inline-block; width: 10px; height:10px; background:black; border-radius:50%; margin-right:12px;'></span> Siren</div>
+      <div><span style='display:inline-block; width: 10px; height:10px; background:#bdbdbd; border:2px solid black; margin-right:10px;'></span> Residential building footprints</div>
+      </div>
+    ",
+    position = "topleft"
+  ) %>% 
+  
+  addScaleBar(
+      position = "bottomleft",
+      options = scaleBarOptions(
+        metric = TRUE,
+        imperial = FALSE,
+        maxWidth = 300
+      )
+    ) %>% 
+        
+  addLayersControl(
+    overlayGroups = c(
+      "Residential building footprints",
+      "Residential building centroids",
+      "Line to neares siren",
+      "Randers border",
+      "Sirens"
+    ),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+building_coverage_map
+
+saveWidget(
+  building_coverage_map,
+  file = "../out/randers_building_coverage_map.html",
+  selfcontained = TRUE
+)
+```
+
