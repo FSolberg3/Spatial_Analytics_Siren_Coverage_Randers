@@ -1,8 +1,3 @@
----
-output:
-  pdf_document: default
-  html_document: default
----
 # Spatial analysis of siren coverage in Randers Municipality
 The main contribution of the repository is an R markdown script workflow which preprocess, analyze and maps spatial data related to siren coverage of the population of Randers Municipality.
 
