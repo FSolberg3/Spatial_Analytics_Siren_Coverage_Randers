@@ -74,3 +74,8 @@ results_part2_residential_building_population*:
 | FALSE | 13,789 | 30,291 | 34.1% |
 | TRUE | 15,978 | 58,542 | 65.9% |
 
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contact
+For further questions please contact 202304776@post.au.dk
